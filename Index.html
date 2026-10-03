@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Placement Prep Agent</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--fg:#1b2430;--mut:#5b6675;--ln:#c5d0de;--ac:#2457c5;--ach:#1b43a0;--acs:#e3ecfb;--ok:#1e7a46;--bad:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141b;--card:#18202b;--fg:#e8edf4;--mut:#9aa7b8;--ln:#2d3a4b;--ac:#6ea0ff;--ach:#8db4ff;--acs:#22314a;--ok:#5fd08e;--bad:#ff8a7a}}
+:root[data-theme="dark"]{--bg:#0f141b;--card:#18202b;--fg:#e8edf4;--mut:#9aa7b8;--ln:#2d3a4b;--ac:#6ea0ff;--ach:#8db4ff;--acs:#22314a;--ok:#5fd08e;--bad:#ff8a7a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 Helvetica,Arial,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:24px;margin:0 0 4px;color:var(--ac)}h2{font-size:17px;margin:0 0 8px;color:var(--ac)}
+section{background:var(--card);border:1px solid var(--ln);border-left:4px solid var(--ac);border-radius:8px;padding:12px;margin:14px 0}
+.m{color:var(--mut);font-size:13px}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:6px;max-width:100%;box-sizing:border-box}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--ac)}
+button{font:inherit;cursor:pointer;color:#fff;background:var(--ac);border:0;border-radius:6px;padding:6px 12px;max-width:100%}
+button:hover{background:var(--ach)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid var(--ln);padding:4px 8px;text-align:left}
+th{background:var(--acs)}
+td input{width:70px}
+.big{font-size:20px;font-weight:bold;color:var(--ac)}
+#alerts li{color:var(--bad)}
+#ready b{color:var(--ok)}
+</style>
+</head>
+<body>
+<main>
+<h1>Placement Prep Agent</h1>
+<div class="m">Diagnose, plan, practise, retest, re-plan. Data is saved in this browser only.</div>
+
+<section>
+<h2>1. Company Profile and Scores</h2>
+<div class="row">
+<label>Company <select id="co"></select></label>
+<label>Weeks <input id="wk" type="number" min="1" value="8" style="width:60px"></label>
+<label>Hours/week <input id="hr" type="number" min="1" value="10" style="width:60px"></label>
+<label>Cutoff <input id="cut" type="number" min="0" max="100" value="70" style="width:60px"></label>
+</div>
+<div class="tw"><table id="inp"></table></div>
+<div class="m" id="wsum"></div>
+</section>
+
+<section>
+<h2>2. Readiness (Readiness Calculator)</h2>
+<div id="ready"></div>
+<div class="tw"><table id="plan"></table></div>
+<div class="m" id="chk"></div>
+<div class="row"><button id="save">Save this as a checkpoint (retest)</button><button id="clr">Clear history</button></div>
+<div id="hist" class="m"></div>
+</section>
+
+<section>
+<h2>3. Weak-Topic Alerts</h2>
+<ul id="alerts"></ul>
+</section>
+
+<section>
+<h2>4. Mistake Notebook</h2>
+<div class="row">
+<input id="mt" placeholder="Wrong question or concept" style="flex:1;min-width:180px">
+<select id="mp"><option>Aptitude</option><option>DSA</option><option>SQL</option><option>HR</option></select>
+<button id="madd">Add</button>
+</div>
+<div class="m">Each mistake returns after 1, 3, then 7 days. Right moves it forward, wrong sends it back to day 1.</div>
+<div id="mlist"></div>
+</section>
+
+<section>
+<h2>5. Project Explainer (2 minutes)</h2>
+<div class="row"><span class="big" id="tm">02:00</span><button id="ts">Start</button><button id="tr">Reset</button></div>
+<textarea id="pt" rows="4" style="width:100%" placeholder="Type or rehearse your project explanation here"></textarea>
+<div class="m" id="wc"></div>
+</section>
+
+<section>
+<h2>6. Application Form Details</h2>
+<div class="m">Save once, then copy each field into any online form. Never store passwords or ID numbers here.</div>
+<div id="prof"></div>
+</section>
+</main>
+
+<script>
+const T=['Aptitude','DSA','SQL','HR'], TARGET=75;
+const CO={ 'Company A (service-type)':{w:[.2,.2,.2,.4],c:70}, 'Company B (product-type)':{w:[.1,.6,.1,.2],c:70}, 'Custom':{w:[.25,.25,.25,.25],c:70} };
+let S={co:'Company A (service-type)',w:[...CO['Company A (service-type)'].w],sc:[70,45,60,80],hist:[],mist:[],prof:{},proj:''};
+const $=id=>document.getElementById(id);
+function load(){try{const r=localStorage.getItem('ppa');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}}
+function store(){try{localStorage.setItem('ppa',JSON.stringify(S))}catch(e){}}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+const r1=x=>Math.round(x*10)/10;
+
+function build(){
+ $('co').innerHTML=Object.keys(CO).map(k=>`<option${k===S.co?' selected':''}>${k}</option>`).join('');
+ $('inp').innerHTML='<tr><th>Topic</th><th>Score (0-100)</th><th>Weight</th></tr>'+T.map((t,i)=>
+  `<tr><td>${t}</td><td><input type="number" min="0" max="100" data-s="${i}" value="${S.sc[i]}"></td><td><input type="number" step="0.05" min="0" max="1" data-w="${i}" value="${S.w[i]}" ${S.co==='Custom'?'':'disabled'}></td></tr>`).join('');
+}
+function calc(){
+ const wk=+$('wk').value||0,hr=+$('hr').value||0,cut=+$('cut').value||0,H=wk*hr;
+ const ws=S.w.reduce((a,b)=>a+b,0);
+ $('wsum').textContent='Weights sum = '+r1(ws*100)/100+(Math.abs(ws-1)<0.001?' (OK)':' (must equal 1.0)');
+ const parts=T.map((t,i)=>S.w[i]*S.sc[i]),R=parts.reduce((a,b)=>a+b,0),gap=cut-R;
+ $('ready').innerHTML=`<div>${T.map((t,i)=>`${S.w[i]} x ${S.sc[i]} = ${r1(parts[i])}`).join(' + ')} = <span class="big">${r1(R)}</span></div>`+
+  `<div>Cutoff ${cut}: `+(gap<=0?`<b>ready</b> (${r1(-gap)} above)`:`gap = ${cut} - ${r1(R)} = <b>${r1(gap)}</b>`)+`</div>`;
+ const raw=S.sc.map(s=>Math.max(0,TARGET-s)),wg=raw.map((g,i)=>g*S.w[i]),tot=wg.reduce((a,b)=>a+b,0);
+ const hrs=wg.map(g=>tot?g/tot*H:0);
+ $('plan').innerHTML=`<tr><th>Topic</th><th>Gap to ${TARGET}</th><th>x Weight</th><th>Hours (of ${H})</th><th>Per week</th></tr>`+
+  T.map((t,i)=>`<tr><td>${t}</td><td>${raw[i]}</td><td>${r1(wg[i])}</td><td>${r1(hrs[i])}</td><td>${wk?r1(hrs[i]/wk):0}</td></tr>`).join('')+
+  `<tr><td><b>Total</b></td><td></td><td><b>${r1(tot)}</b></td><td><b>${r1(hrs.reduce((a,b)=>a+b,0))}</b></td><td></td></tr>`;
+ $('chk').textContent=tot?`Check: hours add up to ${wk} weeks x ${hr} h = ${H} h. Most time goes to the topic with the biggest weighted gap.`:'All topics are at or above the target.';
+ // alerts
+ const prev=S.hist.length?S.hist[S.hist.length-1]:null,al=[];
+ T.forEach((t,i)=>{
+  if(S.sc[i]<TARGET)al.push(`${t}: ${S.sc[i]} is below target ${TARGET} by ${TARGET-S.sc[i]}.`);
+  if(prev&&S.sc[i]<prev.sc[i])al.push(`${t}: dropped from ${prev.sc[i]} to ${S.sc[i]} since the last checkpoint.`);
+ });
+ $('alerts').innerHTML=al.length?al.map(a=>`<li>${esc(a)}</li>`).join(''):'<li style="color:var(--ok)">No weak topics.</li>';
+ // history
+ $('hist').innerHTML=S.hist.length?'<b>Checkpoints:</b><br>'+S.hist.map((h,i)=>{
+  const d=i?` (change ${r1(h.R-S.hist[i-1].R)>=0?'+':''}${r1(h.R-S.hist[i-1].R)})`:'';
+  return `${i+1}. ${esc(h.d)}: scores ${h.sc.join(', ')} - readiness ${r1(h.R)}${d}`}).join('<br>'):'No checkpoints yet. Change a score after a retest, then save again to see progress.';
+ return R;
+}
+
+// mistakes
+const IV=[1,3,7],DAY=86400000;
+function mrender(){
+ const now=Date.now();
+ $('mlist').innerHTML=S.mist.length?S.mist.map((m,i)=>{
+  const dd=Math.ceil((m.due-now)/DAY),st=dd<=0?'due now':`due in ${dd} day(s)`;
+  return `<div class="row"><span style="flex:1;min-width:160px">${esc(m.t)} <span class="m">[${m.p}, stage ${m.s+1}/3, ${st}]</span></span><button data-r="${i}">Right</button><button data-x="${i}">Wrong</button></div>`}).join(''):'<div class="m">No mistakes saved.</div>';
+}
+
+// timer
+let left=120,tid=null;
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+
+// profile
+const PF=[['name','Name'],['email','Email'],['phone','Phone'],['college','College'],['cgpa','CGPA'],['skills','Skills'],['resume','Resume link']];
+function prender(){
+ $('prof').innerHTML=PF.map(([k,l])=>`<div class="row"><label style="width:90px">${l}</label><input data-p="${k}" value="${esc(S.prof[k]||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:160px"><button data-c="${k}">Copy</button></div>`).join('');
+}
+
+document.addEventListener('input',e=>{
+ const t=e.target;
+ if(t.dataset.s!==undefined){S.sc[+t.dataset.s]=Math.max(0,Math.min(100,+t.value||0))}
+ else if(t.dataset.w!==undefined){S.w[+t.dataset.w]=+t.value||0}
+ else if(t.dataset.p){S.prof[t.dataset.p]=t.value}
+ else if(t.id==='pt'){S.proj=t.value;$('wc').textContent=(t.value.trim()?t.value.trim().split(/\s+/).length:0)+' words (about 130 words fit in 1 minute of speaking)'}
+ else if(t.id==='cut'||t.id==='wk'||t.id==='hr'){}
+ else return;
+ store();calc();
+});
+document.addEventListener('change',e=>{
+ if(e.target.id==='co'){S.co=e.target.value;S.w=[...CO[S.co].w];$('cut').value=CO[S.co].c;build();store();calc()}
+});
+document.addEventListener('click',e=>{
+ const t=e.target,n=Date.now();
+ if(t.id==='save'){const R=calc();S.hist.push({d:new Date().toLocaleDateString(),sc:[...S.sc],R});store();calc()}
+ else if(t.id==='clr'){S.hist=[];store();calc()}
+ else if(t.id==='madd'){const v=$('mt').value.trim();if(v){S.mist.push({t:v,p:$('mp').value,s:0,due:n+IV[0]*DAY});$('mt').value='';store();mrender()}}
+ else if(t.dataset.r!==undefined){const m=S.mist[+t.dataset.r];m.s++;if(m.s>2)S.mist.splice(+t.dataset.r,1);else m.due=n+IV[m.s]*DAY;store();mrender()}
+ else if(t.dataset.x!==undefined){const m=S.mist[+t.dataset.x];m.s=0;m.due=n+IV[0]*DAY;store();mrender()}
+ else if(t.id==='ts'){if(tid){clearInterval(tid);tid=null;t.textContent='Start'}else{t.textContent='Pause';tid=setInterval(()=>{left--;$('tm').textContent=fmt(Math.max(left,0));if(left<=0){clearInterval(tid);tid=null;$('ts').textContent='Start'}},1000)}}
+ else if(t.id==='tr'){clearInterval(tid);tid=null;left=120;$('tm').textContent='02:00';$('ts').textContent='Start'}
+ else if(t.dataset.c){const v=S.prof[t.dataset.c]||'';try{navigator.clipboard.writeText(v);t.textContent='Copied'}catch(x){t.textContent='Copy failed'}setTimeout(()=>t.textContent='Copy',1200)}
+});
+
+load();build();$('pt').value=S.proj||'';calc();mrender();prender();
+$('co').value=S.co;
+</script>
+</body>
+</html>
